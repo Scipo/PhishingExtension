@@ -1,94 +1,102 @@
-import { getCachedReputation, cacheReputation, clearExpiredCache} from "./cache/cache";
+import { getCachedReputation, cacheReputation } from "./cache.js";
 
-function isSuspiciousURL(url){
-    const domain = new URL(url).hostname;
-    const suspiciousPatterns = [
-        /g00gle/, /facebok/, /paypa1/, /amaz0n/, /ebayy/
-      ];
-     return suspiciousPatterns.some(pattern => pattern.test(domain));
+let whitelist = [];
+async function loadWhitelistFromList() {
+  const response = await fetch(chrome.runtime.getURL("whitelist.json"));
+  whitelist = await response.json();
 }
+loadWhitelistFromList();
 
-chrome.runtime.onInstalled.addListener(() =>{
-  chrome.alarms.create("clearExpiredCache", { periodInMinutes: 24 * 60 });
+// Load the whitelist from storage
+chrome.storage.sync.get("whitelist", (data) => {
+  whitelist = data.whitelist || [];
 });
 
-// Listen for the alarm and clear expired cache entries
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "clearExpiredCache") {
-    clearExpiredCache();
+// Listen for changes to the whitelist
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.whitelist) {
+    whitelist = changes.whitelist.newValue;
   }
 });
 
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === "install" || details.reason === "update") {
-    clearExpiredCache();
-  }
-});
 
-function hasValidSSL(url){
-    return new Promise((resolve) => {
-        fetch.url, {mode : "no-cors"}
-    }).then(() => resolve(true))
-    .catch(() => resolve(false));
+function isSuspiciousUrl(url) {
+  const domain = new URL(url).hostname;
+
+  // Check if the domain is in the whitelist
+  if (whitelist.some((whitelistedDomain) => domain.endsWith(whitelistedDomain))) {
+    return false; 
+  }
+
+  // List of suspicious patterns
+  const suspiciousPatterns = [
+    /g00gle/, /facebok/, /paypa1/, /amaz0n/, /ebayy/, /yaho0/, /micr0soft/,
+    /netfl1x/, /bankofamericaa/, /wellsfargoo/, /linked1n/, /tw1tter/,
+    /login-/, /secure-/, /verify-/, /account-/, /update-/, /confirm-/,
+    /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/,
+    /[^a-zA-Z0-9.-]/,
+    /^.{30,}$/,
+    /login/, /verify/, /account/, /security/, /update/, /confirm/, /password/,
+    /banking/, /paypal/, /amazon/, /ebay/, /google/, /facebook/, /apple/,
+  ];
+
+  
+  return suspiciousPatterns.some((pattern) => pattern.test(domain));
 }
 
+// Function to check domain reputation using Google Safe Browsing API
 async function checkDomainReputation(url, apiKey) {
-    const domain = new URL(url).hostname;
-    //check cache
-    const cachedResults = await getCachedReputation(domain);
-    if(cachedResults){
-      console.log("Using cached result for:", domain);
-      return cachedResults;
+  const domain = new URL(url).hostname;
+
+  // Check cache first
+  const cachedResult = await getCachedReputation(domain);
+  if (cachedResult) {
+    console.log("Using cached result for:", domain);
+    return cachedResult;
+  }
+
+  
+  const apiUrl = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`;
+  const requestBody = {
+    client: { clientId: "phishing-detector", clientVersion: "1.0" },
+    threatInfo: {
+      threatTypes: ["MALWARE", "SOCIAL_ENGINEERING"],
+      platformTypes: ["ANY_PLATFORM"],
+      threatEntryTypes: ["URL"],
+      threatEntries: [{ url }],
+    },
+  };
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    body: JSON.stringify(requestBody),
+  });
+  const data = await response.json();
+
+  // Cache the result
+  await cacheReputation(domain, data);
+
+  return data;
+}
+
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "analyzeUrl") {
+    const url = request.url;
+    const apiKey = "Replace with your API key";
+
+   
+    if (isSuspiciousUrl(url)) {
+      sendResponse({ isPhishing: true, reason: "Suspicious URL pattern detected." });
+    } else {
+     
+      checkDomainReputation(url, apiKey).then((data) => {
+        const isPhishing = data.matches ? true : false;
+        const reason = isPhishing ? "Domain is known for phishing or malware." : "";
+        sendResponse({ isPhishing, reason });
+      });
     }
 
-    const apiUrl = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`;
-    const requestBody = {
-      client: { clientId: "phishing-detector", clientVersion: "1.0" },
-      threatInfo: {
-        threatTypes: ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE"],
-        platformTypes: ["ANY_PLATFORM"],
-        threatEntryTypes: ["URL"],
-        threatEntries: [{ url }],
-      },
-    };
-      
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      body: JSON.stringify(requestBody),
-    });
-    const data = await response.json();
-  
-    // Cache the result
-    await cacheReputation(domain, data);
-  
-    return data;
+    return true;
   }
-  
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "analyzeUrl") {
-      const url = request.url;
-      const apiKey = "YOUR_GOOGLE_SAFE_BROWSING_API_KEY"; // Replace with your API key
-      let isPhishing = false;
-      let reason = "";
-  
-     
-      if (isSuspiciousURL(url)) {
-        isPhishing = true;
-        reason = "Suspicious URL pattern detected.";
-      }
-  
-      hasValidSSL(url).then((isValid) => {
-        if (!isValid) {
-          isPhishing = true;
-          reason = "Invalid or missing SSL certificate.";
-        }
-  
-        checkDomainReputation(url, apiKey).then((data) => {
-            isPhishing = data.matches ? true : false;
-            reason = isPhishing ? "Domain is known for phishing or malware." : "";
-            sendResponse({ isPhishing, reason });
-        });
-      });
-      return true; 
-    }
-  });
+});
