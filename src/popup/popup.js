@@ -1,5 +1,5 @@
-// Get the current tab's URL and send it to the background script for analysis
 document.addEventListener("DOMContentLoaded", () => {
+
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs.length > 0) {
       const url = tabs[0].url;

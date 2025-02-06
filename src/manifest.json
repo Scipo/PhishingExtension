@@ -3,7 +3,8 @@
     "name": "Phishing Detector",
     "version": "1.0",
     "description": "A browser extension to detect potential phishing websites.",
-    "permissions": ["tabs", "storage", "alarms"],
+    "permissions": ["tabs", "storage", "alarms", "notifications", "declarativeNetRequest", 
+    "webNavigation", "declarativeNetRequestWithHostAccess"],
     "host_permissions": ["<all_urls>"],
     "background": {
       "service_worker": "background.js",
@@ -13,8 +14,24 @@
       "default_popup": "popup/popup.html"
     },
     "options_page": "options/options.html",
+    "web_accessible_resources": [
+      {
+        "resources": ["blocked/blocked.html"],
+        "matches": ["<all_urls>"]
+      }
+    ],
     "icons": {
       "16" : "icons/icon16.png",
       "128": "icons/icon128.png"
+    },
+    "declarative_net_request":{
+      "rule_resources": [
+        {
+          "id" : "block_phishing_patterns",
+          "enabled" : false,
+          "path" : "rules.json"
+        }
+      ]
     }
   }
+  

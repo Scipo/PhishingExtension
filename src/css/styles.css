@@ -7,6 +7,10 @@ body {
   h1 {
     color: #333;
   }
+
+  .h1Red {
+    color : red;
+  }
   
   #result {
     margin-top: 20px;
@@ -45,4 +49,18 @@ body {
     border: none;
     padding: 5px 10px;
     cursor: pointer;
+  }
+
+  #logs {
+    background-color: #f8f9fa;
+    padding: 15px;
+    margin-top: 20px;
+    border-radius: 5px;
+    font-family: monospace;
+    white-space: pre-wrap;
+  }
+  #clear-logs {
+    margin-top: 10px;
+    background-color: #dc3545;
+    color: white;
   }

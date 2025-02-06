@@ -1,6 +1,6 @@
 const DB_NAME = "DomainReputationCache";
 const STORE_NAME = "reputation";
-const CACHE_EXPIRY = 24 * 60 * 60 * 1000; 
+const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 // Open or create the database
 function openDB() {
@@ -19,7 +19,7 @@ function openDB() {
   });
 }
 
-// Get cached reputation data for a domain
+
 async function getCachedReputation(domain) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -30,7 +30,7 @@ async function getCachedReputation(domain) {
     request.onsuccess = () => {
       const result = request.result;
       if (result && Date.now() - result.timestamp < CACHE_EXPIRY) {
-        resolve(result.data); // Return cached data if not expired
+        resolve(result.data); 
       } else {
         resolve(null); 
       }
@@ -39,7 +39,7 @@ async function getCachedReputation(domain) {
   });
 }
 
-
+// Cache reputation data for a domain
 async function cacheReputation(domain, data) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
