@@ -1,3 +1,4 @@
+// Get the current tab's URL and send it to the background script for analysis
 document.addEventListener("DOMContentLoaded", () => {
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -28,3 +29,5 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+

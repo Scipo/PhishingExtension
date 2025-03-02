@@ -19,7 +19,7 @@ function openDB() {
   });
 }
 
-
+// Get cached reputation data for a domain
 async function getCachedReputation(domain) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -30,9 +30,9 @@ async function getCachedReputation(domain) {
     request.onsuccess = () => {
       const result = request.result;
       if (result && Date.now() - result.timestamp < CACHE_EXPIRY) {
-        resolve(result.data); 
+        resolve(result.data); // Return cached data if not expired
       } else {
-        resolve(null); 
+        resolve(null); // Return null if cache is expired or not found
       }
     };
     request.onerror = () => reject(request.error);

@@ -2,7 +2,6 @@ const domainInput = document.getElementById("domainInput");
 const addButton = document.getElementById("addButton");
 const whitelistElement = document.getElementById("whitelist");
 
-
 const logsElements = document.getElementById("logs");
 const clearLogs = document.getElementById("clear-logs");
 const LOG_STORAGE_KEY = "blockedUrlsLog";
@@ -47,29 +46,34 @@ function updateWhitelistUI(whitelist) {
   whitelistElement.innerHTML = whitelist
     .map(
       (domain) => `
-    <li>
-      ${domain}
-      <button class="remove-button" data-domain="${domain}">Remove</button>
-    </li>
-  `
+         <li>
+            <p>${domain}</p>
+            <button class="button-55" id="remove-button" data-domain="${domain}">Remove</button>
+        </li>
+    `
     )
     .join("");
 
   // Add event listeners to remove buttons
-  document.querySelectorAll(".remove-button").forEach((button) => {
+  document.querySelectorAll("#remove-button").forEach((button) => {
     button.addEventListener("click", () => {
       const domain = button.getAttribute("data-domain");
       removeDomain(domain);
     });
   });
 }
+
+// Load the whitelist when the page loads
 loadWhitelist();
 
 // Load and display logs
 function loadLogs(){
   chrome.storage.local.get(LOG_STORAGE_KEY, (data) => {
     const logs = data[LOG_STORAGE_KEY] || [];
-    logsElements.textContent = JSON.stringify(logs, null, 2);
+    const formattedLogs = logs.map(log => 
+      `[${log.timestamp}] ${log.url} - Reason: ${log.reason}`
+    ).join("\n");
+    logsElements.textContent = formattedLogs;
   });
 }
 

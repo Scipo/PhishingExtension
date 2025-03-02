@@ -2,42 +2,23 @@
 <html>
 <head>
   <title>Website Blocked</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 50px;
-      background-color: #f8f9fa;
-    }
-    .blocked-container {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-      background-color: white;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    h1 {
-      color: #dc3545; /* Red color for warning */
-    }
-    p {
-      font-size: 18px;
-    }
-    #blocked-url {
-      color: #6c757d;
-      word-break: break-all;
-    }
-  </style>
+  <link rel="stylesheet" href="../css/styles.css">
 </head>
-<body>
+<body class="blocked_body">
   <div class="blocked-container">
-    <h1> Website Blocked</h1>
-    <p>This website has been blocked because it is suspected to be a phishing site.</p>
-    <p>Blocked URL: <span id="blocked-url"></span></p>
-    <p><a href="#" id="back-button">Go Back</a></p>
-    <button id="report-button">Report False Positive</button>
+    <h1 class="blocked_body_h1"> The Website is blocked</h1>
+    <p class="par_blocked">This website has been blocked because it is suspected to be a phishing site.</p>
+    <p class="par_blocked">Blocked URL: <span id="blocked-url"></span></p>
+    <p class="par_blocked"><a href="#" class="button-55" id="back-button">Go Back</a></p>
+    <p class="par_blocked">If you trust this website<span id="blocked-url"></span></p>
+    <button class="button-55" id="report-button">ADD to Whitelist</button>
     <p id="report-status"></p>
   </div>
   <script src="blocked.js"></script>
 </body>
 </html>
+
+
+
+
+

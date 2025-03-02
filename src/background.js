@@ -1,16 +1,15 @@
 import { getCachedReputation, cacheReputation } from "./cache.js";
 
-const MAX_DYNAMIC_RULES = 4900;
 const MAX_LOG_ENTRIES = 100;
-const RULE_STORAGE_KEY = "dynamicRuleIds"; 
 const WHITELIST_STORAGE_KEY = "whitelist";
 const LOG_STORAGE_KEY = "blockedUrlsLog";
-const apiKey = "YOUR KEY IN HERE"; 
+
 
 let whitelist = [];
 
 // Initialize whitelist
 chrome.storage.sync.get(WHITELIST_STORAGE_KEY, (data) => {
+  console.log("Initialize whitelist");
   whitelist = data[WHITELIST_STORAGE_KEY] || [];
 });
 
@@ -21,21 +20,11 @@ chrome.storage.onChanged.addListener((changes) => {
   }
 });
 
-// Check if URL is suspicious
-function isSuspiciousUrl(url) {
-  const domain = new URL(url).hostname;
-
-  if (whitelist.some((whitelisted) => domain.endsWith(whitelisted))) {
-    console.log(`URL ${url} is whitelisted. Skipping block.`);
-    return false;
-  }
-
-  const suspiciousPatterns = [
-    /g00gle/, /facebok/, /paypa1/, /amaz0n/, /ebayy/, /yaho0/, /micr0soft/,
-    /login-/, /secure-/, /verify-/, /account-/, /update-/, /confirm-/,
-    /[^a-zA-Z0-9.-]/, /^.{30,}$/
-  ];
-  return suspiciousPatterns.some(pattern => pattern.test(domain));
+// check if a url is in the whitelist
+function isWhitelisted(url){
+  console.log("check if a url is in the whitelist"); 
+  //const domain = new URL(url).hostname;
+  return whitelist.some((whitelisted) => url.includes(whitelisted));
 }
 
 async function logBlockedUrl(url, reason) {
@@ -55,112 +44,8 @@ async function logBlockedUrl(url, reason) {
 
 }
 
-// Function to add a dynamic rule and manage FIFO
-async function blockUrl(url) {
-  const domain = new URL(url).hostname;
-  const ruleId = Math.abs(Date.now() | 0); 
-  console.log(ruleId);
-  // Fetch stored rule IDs
-  const { [RULE_STORAGE_KEY]: storedRuleIds = [] } = await chrome.storage.sync.get(RULE_STORAGE_KEY);
-
-  // Define the new rule
-  const newRule = {
-    id: ruleId,
-    priority: 1,
-    action: { type: "block" },
-    condition: {
-      urlFilter: domain,
-      resourceTypes: ["main_frame"]
-    }
-  };
-
-  // Add the rule
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    addRules: [newRule],
-    removeRuleIds: []
-  });
-
-  // Update stored rule IDs
-  const updatedRuleIds = [...storedRuleIds, ruleId];
-
-  // Remove oldest rules if exceeding the limit
-  if (updatedRuleIds.length > MAX_DYNAMIC_RULES) {
-    const excess = updatedRuleIds.length - MAX_DYNAMIC_RULES;
-    const rulesToRemove = updatedRuleIds.slice(0, excess);
-
-    await chrome.declarativeNetRequest.updateDynamicRules({
-      addRules: [],
-      removeRuleIds: rulesToRemove
-    });
-
-    updatedRuleIds.splice(0, excess);
-  }
-
-  // Save updated rule IDs
-  await chrome.storage.sync.set({ [RULE_STORAGE_KEY]: updatedRuleIds });
-  console.log(`Blocked domain: ${domain}`);
-}
-
-// Function to validate stored rule IDs against active rules
-async function validateRules() {
-  const { [RULE_STORAGE_KEY]: storedRuleIds = [] } = await chrome.storage.sync.get(RULE_STORAGE_KEY);
-  const activeRules = await chrome.declarativeNetRequest.getDynamicRules();
-  const activeRuleIds = activeRules.map(rule => rule.id);
-
-  // Find orphaned rules (stored but not active)
-  const orphanedRuleIds = storedRuleIds.filter(id => !activeRuleIds.includes(id));
-
-  if (orphanedRuleIds.length > 0) {
-    // Remove orphaned IDs from storage
-    const updatedRuleIds = storedRuleIds.filter(id => !orphanedRuleIds.includes(id));
-    await chrome.storage.sync.set({ [RULE_STORAGE_KEY]: updatedRuleIds });
-    console.log("Cleaned up orphaned rule IDs:", orphanedRuleIds);
-  }
-}
-
-chrome.webNavigation.onBeforeNavigate.addListener((details) => {
-  const url = details.url;
-  if (isSuspiciousUrl(url)) {
-    logBlockedUrl(details.url, "suspicious_pattern");
-    chrome.tabs.update(details.tabId, {
-      url: chrome.runtime.getURL("blocked/blocked.html") + `?url=${encodeURIComponent(url)}`
-    });
-  }else{
-    checkDomainReputation(url, apiKey).then((data) => {
-      const isPhishing = data.matches ? true : false;
-      const reason = isPhishing ? "Domain is known for phishing or malware." : "";
-      if(isPhishing){
-        blockUrl(url).then(() => {
-          sendResponse({ isPhishing: true, reason: "Suspicious URL pattern detected." });
-        });
-      }
-    });
-  }
-}, { url: [{ schemes: ["http", "https"] }] });
-
-
-// Periodically validate rules (e.g., every hour)
-chrome.alarms.create("validateRules", { periodInMinutes: 60 });
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "validateRules") validateRules();
-});
-
-function reportFalsePositive(url){
-  console.log('report false positive : ${url}');
-  return {success : true};
-}
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if(request.data === "reportFalsePositive"){
-    const response = reportFalsePositive(request.url);
-    sendResponse(response);
-  }
-  return true;
-});
-
-
-
 // Function to check domain reputation using Google Safe Browsing API
-async function checkDomainReputation(url, apiKey) {
+async function checkGoogleSafeBrowsing(url) {
   const domain = new URL(url).hostname;
 
   // Check cache first
@@ -171,9 +56,24 @@ async function checkDomainReputation(url, apiKey) {
   }
 
   // If not cached, make an API call
-  const apiUrl = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`;
+  const API_KEY= "YOUR_GOOGLE_SAFE_BROWSING_API_KEY"; 
+  const API_URL = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${API_KEY}`;
+  // Validate URL format
+  try {
+    new URL(url); // Throws an error for invalid URLs
+  } catch (error) {
+    console.error("Invalid URL:", url);
+    return false; // Treat invalid URLs as safe
+  }
+
+  // Validate API key
+  if (!API_KEY || API_KEY === "YOUR_GOOGLE_SAFE_BROWSING_API_KEY") {
+    console.error("Missing or invalid Google Safe Browsing API key.");
+    return false;
+  }
+
   const requestBody = {
-    client: { clientId: "phishing-detector", clientVersion: "1.0" },
+    client: { clientId: "phishing-detector-extension", clientVersion: "1.0" },
     threatInfo: {
       threatTypes: ["MALWARE", "SOCIAL_ENGINEERING"],
       platformTypes: ["ANY_PLATFORM"],
@@ -182,42 +82,85 @@ async function checkDomainReputation(url, apiKey) {
     },
   };
 
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    body: JSON.stringify(requestBody),
-  });
-  const data = await response.json();
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
 
-  // Cache the result
-  await cacheReputation(domain, data);
+    if (!response.ok) {
+      // Handle specific HTTP errors
+      let errorMessage;
+      switch (response.status) {
+        case 400:
+          errorMessage = "Bad request (invalid parameters).";
+          break;
+        case 403:
+          errorMessage = "API key is invalid or unauthorized.";
+          break;
+        case 429:
+          errorMessage = "API quota exceeded.";
+          break;
+        default:
+          errorMessage = `HTTP error! Status: ${response.status}`;
+      }
+      throw new Error(errorMessage);
+    }
 
-  return data;
+    const data = await response.json();
+    cacheReputation(domain, data);
+    return data.matches ? true : false;
+
+  } catch (error) {
+    return false; // Assume safe on error
+  }
 }
 
 
-// Listen for messages from the popup
+//Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "analyzeUrl") {
     const url = request.url;
-    // Check if the URL is suspicious
-    if (isSuspiciousUrl(url)) {
-      blockUrl(url).then(() => {
-        sendResponse({ isPhishing: true, reason: "Suspicious URL pattern detected." });
-      })
-    } else {
-      // Check domain reputation
-      checkDomainReputation(url, apiKey).then((data) => {
-        const isPhishing = data.matches ? true : false;
-        const reason = isPhishing ? "Domain is known for phishing or malware." : "";
-        if(isPhishing){
-          blockUrl(url).then(() => {
-            sendResponse({ isPhishing: true, reason: "Suspicious URL pattern detected." });
-          });
+
+    // Check if the URL is in the whitelist
+    if (isWhitelisted(url)) {
+      sendResponse({ isPhishing: false, reason: "" });
+      return true; 
+    }else{
+      checkGoogleSafeBrowsing(url).then((isUnsafe) => {
+        console.log(isUnsafe, " ana");
+        if (isUnsafe == true) {
+            sendResponse({ isPhishing: true, reason: "google_safe_browsing" });
+        } else {
+          sendResponse({ isPhishing: false, reason: "" });
         }
       });
-    }
-
-    return true; // Required for async response
+    } 
+    return true; 
   }
 });
 
+// Redirect to blocked.html if the URL is unsafe
+chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
+  const url = details.url;
+  const isUnsafe = await checkGoogleSafeBrowsing(url);
+  console.log(isUnsafe);
+  // Skip if the URL is in the whitelist
+  if (isWhitelisted(url)){
+    console.log("This is a test for whitelist");
+    return;
+  }else{
+    if (isUnsafe == true) {
+      console.log(isUnsafe);
+      logBlockedUrl(url, "google_safe_browsing");
+      console.log(`Blocked unsafe URL: ${url}`);
+      chrome.tabs.update(details.tabId, {
+        url: chrome.runtime.getURL("blocked/blocked.html") + `?url=${encodeURIComponent(url)}`
+      });
+    }
+  }
+  
+  
+   
+}, { url: [{ schemes: ["http", "https"] }] });

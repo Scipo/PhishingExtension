@@ -1,3 +1,4 @@
+const whitelistElement = document.getElementById("whitelist");
 // Extract the blocked URL from the query parameter
 const params = new URLSearchParams(window.location.search);
 const blockedUrl = params.get('url');
@@ -10,18 +11,18 @@ document.getElementById('back-button').addEventListener('click', () => {
 
 // Handle false positive reporting
 document.getElementById('report-button').addEventListener('click', () => {
-  const reportStatus = document.getElementById('report-status');
-  reportStatus.textContent = "Reporting false positive...";
-
-  // Send the blocked URL to the background script for reporting
-  chrome.runtime.sendMessage(
-    { action: "reportFalsePositive", url: blockedUrl },
-    (response) => {
-      if (response?.success) {
-        reportStatus.textContent = "Thank you for reporting!";
-      } else {
-        reportStatus.textContent = "Failed to report. Please try again.";
+  console.log("This is block : ", blockedUrl);
+  const domain = blockedUrl;
+  if (domain) {
+    chrome.storage.sync.get("whitelist", (data) => {
+      const whitelist = data.whitelist || [];
+      if (!whitelist.includes(domain)) {
+        whitelist.push(domain);
+        chrome.storage.sync.set({ whitelist }, () => {
+           //updateWhitelistUI(whitelist);
+        });
       }
-    }
-  );
+    });
+  }
 });
+
